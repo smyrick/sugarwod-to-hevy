@@ -184,6 +184,14 @@ To re-import after fixing weights:
 3. Import Strong CSV again
 4. Spot-check a known session (e.g. squat 320×5, not ~705 or 319.89)
 
+### Revert without leaving the Import Data screen
+
+Right after import, Hevy shows **Workout data successfully imported!** with a red **Revert Data Import** link. You can tap between **Home** and **Profile** on the bottom nav and the revert option **stays available** as long as you do not fully exit the import flow. Use this window to spot-check workouts in Hevy and undo if weights or exercises look wrong.
+
+![Hevy Import Data screen with Revert Data Import](../docs/images/hevy-import-revert.png)
+
+If you miss that window, revert from **Profile** → **Settings** → **Export & Import Data** instead.
+
 ## Validation spot checks
 
 ### Hevy-verified sessions

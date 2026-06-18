@@ -2,6 +2,12 @@
 
 Convert a SugarWod workout export (`workouts.csv`) into the **Strong app CSV format** that Hevy accepts via **Import Strong CSV**.
 
+## Run with an AI agent (no coding)
+
+If you use Cursor, Claude Code, or another agent that supports [Agent Skills](https://agentskills.io/specification), open this repo and ask your agent to migrate your SugarWOD data to Hevy. The agent will follow [SKILL.md](SKILL.md): locate your export, confirm weight units, run the converter, validate the output, and walk you through Hevy import.
+
+You still need Python 3 installed, but you do not need to run commands yourself.
+
 ```mermaid
 flowchart LR
   sugarwod["SugarWOD app export"] --> csvIn["input/workouts.csv gitignored"]
@@ -80,6 +86,17 @@ Tests cover the weight round-trip, load/rep pairing, `score_type` routing, dedup
 
 - Hevy only allows **one** Strong CSV import per account. If you already imported a file, revert/remove it in Settings before trying again.
 - Headers must be in English exactly as shown below.
+
+### Revert / undo an import
+
+Right after a successful import, you can undo it **without leaving the Import Data screen**:
+
+1. Stay on **Profile** → **Settings** → **Export & Import Data** → **Import Data** (or return to it from **Home** / **Profile** via the bottom nav)
+2. Tap the red **Revert Data Import** link
+
+![Hevy Import Data screen with Revert Data Import](docs/images/hevy-import-revert.png)
+
+The revert option stays available while you flip between **Home** and **Profile** — use this to spot-check workouts in Hevy before committing to the import. Once you navigate away from the import flow entirely, you may need to revert from Settings instead.
 
 ### Re-import after a weight fix
 
@@ -167,3 +184,4 @@ Edit `EXERCISE_NAME_MAP` at the top of `convert_sugarwod_to_hevy.py` to map addi
 | [docs/SUGARWOD_FORMAT.md](docs/SUGARWOD_FORMAT.md) | SugarWod input CSV — columns, `set_details` JSON, `score_type` routing |
 | [docs/STRONG_FORMAT.md](docs/STRONG_FORMAT.md) | Strong output CSV — columns, row model, Hevy import requirements |
 | [docs/LEARNINGS.md](docs/LEARNINGS.md) | Weight rounding, Hevy quirks, converter behavior, validation spot checks |
+| [SKILL.md](SKILL.md) | Agent Skill — guided migration workflow for non-coders |
