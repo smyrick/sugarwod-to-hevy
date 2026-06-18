@@ -2,186 +2,97 @@
 
 Convert a SugarWod workout export (`workouts.csv`) into the **Strong app CSV format** that Hevy accepts via **Import Strong CSV**.
 
-## Run with an AI agent (no coding)
-
-If you use Cursor, Claude Code, or another agent that supports [Agent Skills](https://agentskills.io/specification), open this repo and ask your agent to migrate your SugarWOD data to Hevy. The agent will follow [SKILL.md](SKILL.md): locate your export, confirm weight units, run the converter, validate the output, and walk you through Hevy import.
-
-You still need Python 3 installed, but you do not need to run commands yourself.
-
 ```mermaid
 flowchart LR
   sugarwod["SugarWOD app export"] --> csvIn["input/workouts.csv gitignored"]
-  csvIn --> script["convert_sugarwod_to_hevy.py"]
-  script --> csvOut["output/workouts_hevy.csv gitignored"]
+  csvIn --> runpy["run.py"]
+  runpy --> csvOut["output/workouts_hevy.csv gitignored"]
   csvOut --> hevy["Hevy Import Strong CSV"]
 ```
 
-## Local data layout
+**Three steps:** export from SugarWOD → convert → import into Hevy.
 
-Personal workout data stays out of git. Use two local folders:
+**Last tested:** June 18, 2026 — SugarWOD **10.1.1** (iOS), Hevy **3.0.15** (iOS). Export and import flows can change in future app updates; if something breaks, [open an issue](https://github.com/smyrick/sugarwod-to-hevy/issues).
+
+---
+
+## Pick your path
+
+| Path | Who it's for | What to run |
+|------|--------------|-------------|
+| **A — AI agent** | Cursor, Claude Code, or any agent with [Agent Skills](https://agentskills.io/specification) | Open this repo and ask your agent to migrate your data. It follows [SKILL.md](SKILL.md) and runs `run.py` for you. |
+| **B — One command, no clone** | Comfortable with a terminal, don't want git | See [no-clone one-liner](#one-command-no-clone) below |
+| **C — Guided script** | Downloaded or cloned the repo, want prompts | `python3 run.py` |
+| **D — Power user** | Know CLI flags, scripting | `python3 convert_sugarwod_to_hevy.py` — see [docs/USAGE.md](docs/USAGE.md) |
+
+Paths **A** and **C** run the same guided flow (`run.py`); the agent adds judgment at the weight-unit and pre-import confirmation steps.
+
+Requires **Python 3** (stdlib only — no pip install for conversion).
+
+---
+
+## One command, no clone
+
+If you already have `workouts.csv` from SugarWOD (usually in Downloads):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/smyrick/sugarwod-to-hevy/main/convert_sugarwod_to_hevy.py \
+  | python3 - ~/Downloads/workouts.csv -o workouts_hevy.csv
+```
+
+For the full guided experience (auto-locate export, verify header, validation summary):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/smyrick/sugarwod-to-hevy/main/run.py -o run.py
+curl -fsSL https://raw.githubusercontent.com/smyrick/sugarwod-to-hevy/main/convert_sugarwod_to_hevy.py -o convert_sugarwod_to_hevy.py
+python3 run.py
+```
+
+Then import `workouts_hevy.csv` into Hevy — [docs/IMPORT_HEVY.md](docs/IMPORT_HEVY.md).
+
+---
+
+## Quick start (cloned repo)
+
+```bash
+python3 run.py
+```
+
+`run.py` will find your export, verify it, convert it, and print what to do next. Put your SugarWOD file at `input/workouts.csv` or leave it in Downloads.
+
+New to git or Python? Start with [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+
+---
+
+## Privacy
+
+Personal workout data stays out of git:
 
 ```
 sugarwod-to-hevy/
-  input/workouts.csv      ← SugarWod export (you provide)
+  input/workouts.csv       ← your SugarWod export (you provide)
   output/workouts_hevy.csv ← generated Strong CSV for Hevy
 ```
 
-Both `input/` and `output/` are gitignored. You can still pass any path on the command line if you prefer keeping the export elsewhere.
+Both folders are gitignored. The `.gitignore` also blocks `*.csv` repo-wide. **Never commit workout exports** — even on forks.
 
-**Contributors:** never commit files from `input/` or `output/` — even on forks. Workout exports contain personal data. The `.gitignore` also blocks `*.csv` anywhere in the repo as a safety net.
+---
 
-## Step 1: Export from SugarWod
-
-1. Open the **SugarWOD** app
-2. Go to **More** (or the menu) → **Tools & Resources** → **Export Workouts**
-3. Confirm the export — SugarWOD emails a CSV (often named `workouts.csv`)
-4. Save it into this repo as `input/workouts.csv` (create the `input/` folder if needed)
-
-Export before your SugarWOD subscription ends if you are leaving the platform.
-
-## Step 2: Run the converter
-
-Requires Python 3 (stdlib only — no pip install).
-
-```bash
-python3 convert_sugarwod_to_hevy.py
-```
-
-With defaults, reads `input/workouts.csv` and writes `output/workouts_hevy.csv`. The `output/` folder is created automatically.
-
-Or pass an explicit input path:
-
-```bash
-python3 convert_sugarwod_to_hevy.py ~/Downloads/workouts.csv
-```
-
-### CLI arguments
-
-| Argument | Default | Purpose |
-|----------|---------|---------|
-| `input` | `input/workouts.csv` | Path to SugarWod export |
-| `-o`, `--output` | `output/workouts_hevy.csv` | Strong CSV destination |
-| `--input-weight-unit` | `lbs` | Unit of load values in SugarWod |
-| `--strong-weight-unit` | `kg` | Unit written to Strong `Weight` column |
-
-### Running the tests
-
-Optional, for contributors. The converter is stdlib-only; tests need `pytest`:
-
-```bash
-python3 -m venv .venv && .venv/bin/pip install pytest
-.venv/bin/python -m pytest
-```
-
-Tests cover the weight round-trip, load/rep pairing, `score_type` routing, dedupe, and bad-row skipping.
-
-## Step 3: Import into Hevy
-
-1. Open Hevy → **Profile** → **Settings** → **Export & Import Data** → **Import Data**
-2. Tap **Import Strong CSV** (not a generic upload)
-3. Select `output/workouts_hevy.csv`
-4. Wait for the import to finish
-
-**Important:**
-
-- Hevy only allows **one** Strong CSV import per account. If you already imported a file, revert/remove it in Settings before trying again.
-- Headers must be in English exactly as shown below.
-
-### Revert / undo an import
-
-Right after a successful import, you can undo it **without leaving the Import Data screen**:
-
-1. Stay on **Profile** → **Settings** → **Export & Import Data** → **Import Data** (or return to it from **Home** / **Profile** via the bottom nav)
-2. Tap the red **Revert Data Import** link
-
-![Hevy Import Data screen with Revert Data Import](docs/images/hevy-import-revert.png)
-
-The revert option stays available while you flip between **Home** and **Profile** — use this to spot-check workouts in Hevy before committing to the import. Once you navigate away from the import flow entirely, you may need to revert from Settings instead.
-
-### Re-import after a weight fix
-
-If you previously imported with inflated weights (~2.2× too heavy in Hevy):
-
-1. Hevy → Profile → Settings → Export & Import Data → **revert/remove** the old import
-2. Regenerate `output/workouts_hevy.csv` with this script (default writes kg)
-3. Import Strong CSV again
-4. Spot-check a known lift (e.g. a 320 lb squat should show ~320 lbs in Hevy, not ~705 lbs)
-
-## Weight units
-
-SugarWod stores barbell loads in **pounds**. The Strong CSV schema has a single `Weight` column with **no unit field**. Hevy's Strong importer treats those values as **kilograms**, then converts to your display unit (e.g. lbs).
-
-By default this script rounds SugarWod loads to the nearest whole pound and uses adaptive kg precision (2–3 decimals) so Hevy displays clean plate weights — see [docs/LEARNINGS.md](docs/LEARNINGS.md#rounding-whole-pounds--adaptive-kg-precision) for how `lbs_to_strong_kg()` works and which loads were verified.
-
-| SugarWod load | CSV `Weight` | Hevy display (lbs) |
-|---------------|--------------|---------------------|
-| 320 lbs | 145.15 | 320 |
-| 190 lbs | 86.183 | 190 |
-| 335 lbs | 151.953 | 335 |
-
-Bodyweight and cardio rows keep `Weight` as `0`.
-
-To write raw pound values (legacy behavior — weights will appear ~2.2× too heavy in Hevy):
-
-```bash
-python3 convert_sugarwod_to_hevy.py --strong-weight-unit lbs
-```
-
-## Output format (Strong app schema)
-
-The script writes a **Strong app CSV** — one row per set, 12 comma-separated columns — matching what Hevy expects for **Import Strong CSV**.
-
-```text
-Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE
-```
-
-**Full schema reference:** [docs/STRONG_FORMAT.md](docs/STRONG_FORMAT.md) — column semantics, formatting rules, row patterns (strength / timed WOD / reps), weight-unit behavior, and validation checklist. Intended for humans and for other tools or AI agents working with this format.
-
-Example row (335 lb squat converted to kg for Hevy):
-
-```csv
-2021-12-14 12:00:00,Back Squat 1x1,45m,Squat (Barbell),1,151.953,1,0,0,,RX,
-```
-
-## Mapping notes
-
-- **Barbell lifts** (`score_type = Load`): sets built from `set_details` loads and reps parsed from the description. When only the top working weight was logged, the weight is replicated across all prescribed sets.
-- **CrossFit WODs** (time, reps, rounds+reps): imported as custom exercises named after the workout title. Timed WODs use the `Seconds` column; details go in `Notes`.
-- **PR / RX / SCALED** flags are preserved in `Workout Notes`.
-- **Duration** is estimated for lifting sessions (`~4 min per set`); timed WODs use their actual time (e.g. Murph → `46m`).
-- **Distance** and **Seconds** default to `0` when not applicable (matching Strong exports).
-- Exercise names are mapped to Hevy/Strong canonical names where possible (e.g. `Back Squat` → `Squat (Barbell)`). Unmapped names become custom exercises in Hevy — see [docs/LEARNINGS.md](docs/LEARNINGS.md#unmapped-exercise-names-become-custom-exercises-in-hevy).
-
-## Validation checklist
-
-After conversion, spot-check your `output/workouts_hevy.csv`:
-
-| Check | What to verify |
-|-------|----------------|
-| Header | 12 columns: `Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE` |
-| Delimiter | Comma (not semicolon) |
-| Dates | `YYYY-MM-DD HH:MM:SS` |
-| Set order | Contiguous `1..N` per exercise within a workout |
-| Zero-weight rows | WODs/cardio: `Weight=0`, `Reps=0`; timed WODs use `Seconds` |
-| Load weights | Whole-lb SugarWod loads → kg in CSV; Hevy should show the original lb value (typically 2–3 kg decimals) |
-
-Example spot checks:
-
-- **Murph:** `Seconds` populated (e.g. `2762`), `Duration` like `46m`, `Weight=0`, `Reps=0`
-- **Back Squat:** exercise name `Squat (Barbell)`, weight in kg matching your SugarWod lbs
-- **Cindy:** custom exercise name, result in `Notes`
-
-The script prints how many workouts and set rows were written. Duplicate SugarWod rows are deduplicated automatically — see [docs/LEARNINGS.md](docs/LEARNINGS.md#sugarwod-export-duplicate-rows).
-
-## Extend exercise name mapping
-
-Edit `EXERCISE_NAME_MAP` at the top of `convert_sugarwod_to_hevy.py` to map additional SugarWod lift names and reduce duplicate custom exercises in Hevy.
-
-## Further reading
+## Documentation
 
 | Doc | Contents |
 |-----|----------|
-| [docs/SUGARWOD_FORMAT.md](docs/SUGARWOD_FORMAT.md) | SugarWod input CSV — columns, `set_details` JSON, `score_type` routing |
-| [docs/STRONG_FORMAT.md](docs/STRONG_FORMAT.md) | Strong output CSV — columns, row model, Hevy import requirements |
-| [docs/LEARNINGS.md](docs/LEARNINGS.md) | Weight rounding, Hevy quirks, converter behavior, validation spot checks |
-| [SKILL.md](SKILL.md) | Agent Skill — guided migration workflow for non-coders |
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Install Python, download ZIP vs git clone, file layout |
+| [docs/EXPORT_SUGARWOD.md](docs/EXPORT_SUGARWOD.md) | Export workouts from the SugarWOD app |
+| [docs/USAGE.md](docs/USAGE.md) | `run.py`, converter CLI, weight units, validation, tests |
+| [docs/IMPORT_HEVY.md](docs/IMPORT_HEVY.md) | Import Strong CSV, revert, re-import after fixes |
+| [docs/SUGARWOD_FORMAT.md](docs/SUGARWOD_FORMAT.md) | Input CSV schema |
+| [docs/STRONG_FORMAT.md](docs/STRONG_FORMAT.md) | Output CSV schema |
+| [docs/LEARNINGS.md](docs/LEARNINGS.md) | Weight rounding, Hevy quirks, migration pitfalls |
+| [SKILL.md](SKILL.md) | Agent Skill — guided migration for AI assistants |
+
+---
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).

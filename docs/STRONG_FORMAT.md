@@ -6,7 +6,9 @@ This document describes the **Strong app workout export CSV schema** — the for
 
 **Related docs in this repo:**
 
-- [README.md](../README.md) — how to run the SugarWod → Strong converter
+- [README.md](../README.md) — overview and pick-your-path
+- [USAGE.md](USAGE.md) — how to run the converter
+- [IMPORT_HEVY.md](IMPORT_HEVY.md) — Hevy import and revert
 - [SUGARWOD_FORMAT.md](SUGARWOD_FORMAT.md) — SugarWod input CSV schema
 - [LEARNINGS.md](LEARNINGS.md) — Hevy weight-unit behavior, rounding, re-import limits
 

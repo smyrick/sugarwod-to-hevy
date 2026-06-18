@@ -2,6 +2,9 @@
 
 Notes from building and validating this converter. Useful if weights look wrong after import or you are debugging Hevy behavior.
 
+- [README.md](../README.md) — overview
+- [USAGE.md](USAGE.md) — converter usage and weight units
+- [IMPORT_HEVY.md](IMPORT_HEVY.md) — Hevy import and revert
 - [STRONG_FORMAT.md](STRONG_FORMAT.md) — Strong CSV output schema
 - [SUGARWOD_FORMAT.md](SUGARWOD_FORMAT.md) — SugarWod input CSV schema
 

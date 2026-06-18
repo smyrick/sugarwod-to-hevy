@@ -215,6 +215,27 @@ def test_dedupe_keeps_richest_set_details():
 
 
 # --------------------------------------------------------------------------
+# is_sugarwod_export
+# --------------------------------------------------------------------------
+
+
+def test_is_sugarwod_export_valid(tmp_path):
+    path = tmp_path / "workouts.csv"
+    path.write_text(conv.SUGARWOD_HEADER_LINE + "\n", encoding="utf-8")
+    assert conv.is_sugarwod_export(path) is True
+
+
+def test_is_sugarwod_export_invalid_header(tmp_path):
+    path = tmp_path / "bad.csv"
+    path.write_text("foo,bar,baz\n", encoding="utf-8")
+    assert conv.is_sugarwod_export(path) is False
+
+
+def test_is_sugarwod_export_missing_file(tmp_path):
+    assert conv.is_sugarwod_export(tmp_path / "nope.csv") is False
+
+
+# --------------------------------------------------------------------------
 # convert_file end-to-end: bad rows are skipped, not fatal
 # --------------------------------------------------------------------------
 

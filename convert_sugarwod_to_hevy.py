@@ -32,6 +32,22 @@ STRONG_HEADERS = [
     "RPE",
 ]
 
+# SugarWod export CSV header (11 lowercase columns). Canonical source for input validation.
+SUGARWOD_HEADERS = [
+    "date",
+    "title",
+    "description",
+    "best_result_raw",
+    "best_result_display",
+    "score_type",
+    "barbell_lift",
+    "set_details",
+    "notes",
+    "rx_or_scaled",
+    "pr",
+]
+SUGARWOD_HEADER_LINE = ",".join(SUGARWOD_HEADERS)
+
 DEFAULT_WORKOUT_DURATION = "45m"
 LBS_TO_KG = 0.45359237
 
@@ -70,6 +86,16 @@ EXERCISE_NAME_MAP: dict[str, str] = {
 }
 
 REP_PATTERN = re.compile(r"#\d+:\s*(\d+)\s*reps?", re.IGNORECASE)
+
+
+def is_sugarwod_export(path: Path) -> bool:
+    """Return True if the file's first line matches the SugarWod export header."""
+    try:
+        with path.open(encoding="utf-8") as infile:
+            header = infile.readline().strip()
+    except OSError:
+        return False
+    return header == SUGARWOD_HEADER_LINE
 
 
 def map_exercise_name(name: str) -> str:

@@ -2,11 +2,13 @@
 
 This document describes the **SugarWod workout export CSV** (`workouts.csv`) — the input format for `convert_sugarwod_to_hevy.py`. It is written for humans and for AI agents extending or debugging the converter without spelunking the source first.
 
-**How to obtain:** SugarWOD app → **More** → **Tools & Resources** → **Export Workouts**. SugarWOD emails a CSV (usually named `workouts.csv`).
+**How to obtain:** See [EXPORT_SUGARWOD.md](EXPORT_SUGARWOD.md).
 
 **Related docs in this repo:**
 
-- [README.md](../README.md) — how to run the converter
+- [README.md](../README.md) — overview and pick-your-path
+- [USAGE.md](USAGE.md) — how to run the converter
+- [EXPORT_SUGARWOD.md](EXPORT_SUGARWOD.md) — export from SugarWOD app
 - [STRONG_FORMAT.md](STRONG_FORMAT.md) — output schema (Strong app CSV for Hevy)
 - [LEARNINGS.md](LEARNINGS.md) — migration pitfalls, weight rounding, converter quirks
 
