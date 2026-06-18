@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Convert SugarWod workout export CSV to Strong app format for Hevy import."""
+"""Convert SugarWod workout export CSV to Strong app format for Hevy import.
+
+Input schema: docs/SUGARWOD_FORMAT.md
+Output schema: docs/STRONG_FORMAT.md
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Strong app export schema accepted by Hevy's "Import Strong CSV".
+# Full column semantics and examples: docs/STRONG_FORMAT.md
 STRONG_HEADERS = [
     "Date",
     "Workout Name",
@@ -99,6 +104,19 @@ def extract_loads(set_details: list[dict]) -> list[float]:
     return loads
 
 
+def lbs_to_strong_kg(lbs: float) -> str:
+    """Format kg so Hevy's kg→lbs display shows the original whole-pound load."""
+    lbs = round(lbs)
+    if lbs == 0:
+        return "0"
+    kg = lbs * LBS_TO_KG
+    for precision in range(2, 6):
+        formatted = f"{kg:.{precision}f}"
+        if round(float(formatted) / LBS_TO_KG, 2) == lbs:
+            return formatted
+    return f"{kg:.4f}"
+
+
 def format_strong_weight(
     value: float | str | None,
     *,
@@ -111,16 +129,21 @@ def format_strong_weight(
     if weight == 0:
         return "0"
     if input_weight_unit == "lbs" and strong_weight_unit == "kg":
-        weight *= LBS_TO_KG
-    elif input_weight_unit == "kg" and strong_weight_unit == "lbs":
-        weight /= LBS_TO_KG
-    return f"{weight:.1f}"
+        return lbs_to_strong_kg(weight)
+    if input_weight_unit == "lbs":
+        return f"{round(weight):.0f}"
+    if input_weight_unit == "kg" and strong_weight_unit == "lbs":
+        return f"{round(weight / LBS_TO_KG):.0f}"
+    return f"{weight:.2f}"
 
 
 def format_strong_reps(value: int | str | None) -> str:
     if value is None or value == "":
         return "0"
-    return str(int(value))
+    try:
+        return str(int(float(value)))
+    except (ValueError, TypeError):
+        return "0"
 
 
 def format_strong_duration(seconds: int | None) -> str:
@@ -388,7 +411,7 @@ def convert_file(
     *,
     input_weight_unit: str = "lbs",
     strong_weight_unit: str = "kg",
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, int]:
     with input_path.open(newline="", encoding="utf-8") as infile:
         reader = csv.DictReader(infile)
         rows = list(reader)
@@ -397,14 +420,20 @@ def convert_file(
     rows = dedupe_rows(rows)
 
     output_rows: list[list[str]] = []
+    skipped = 0
     for row in rows:
-        output_rows.extend(
-            convert_row(
-                row,
-                input_weight_unit=input_weight_unit,
-                strong_weight_unit=strong_weight_unit,
+        try:
+            output_rows.extend(
+                convert_row(
+                    row,
+                    input_weight_unit=input_weight_unit,
+                    strong_weight_unit=strong_weight_unit,
+                )
             )
-        )
+        except (ValueError, KeyError, TypeError) as exc:
+            skipped += 1
+            label = f"{row.get('date', '?')} {row.get('title', '?')}".strip()
+            print(f"Warning: skipped row ({label}): {exc}", file=sys.stderr)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -413,7 +442,7 @@ def convert_file(
         writer.writerow(STRONG_HEADERS)
         writer.writerows(output_rows)
 
-    return input_count, len(rows), len(output_rows)
+    return input_count, len(rows), len(output_rows), skipped
 
 
 def main() -> int:
@@ -423,8 +452,8 @@ def main() -> int:
     parser.add_argument(
         "input",
         nargs="?",
-        default="workouts.csv",
-        help="Path to SugarWod workouts.csv (default: workouts.csv)",
+        default="input/workouts.csv",
+        help="Path to SugarWod workouts.csv (default: input/workouts.csv)",
     )
     parser.add_argument(
         "-o",
@@ -453,7 +482,7 @@ def main() -> int:
         print(f"Error: input file not found: {input_path}", file=sys.stderr)
         return 1
 
-    input_count, unique_count, output_count = convert_file(
+    input_count, unique_count, output_count, skipped = convert_file(
         input_path,
         output_path,
         input_weight_unit=args.input_weight_unit,
@@ -464,8 +493,10 @@ def main() -> int:
             f"Deduplicated {input_count - unique_count} duplicate workout rows "
             f"({input_count} -> {unique_count} unique workouts)"
         )
+    if skipped:
+        print(f"Skipped {skipped} unparseable workout rows (see warnings above)")
     print(
-        f"Converted {unique_count} SugarWod workouts -> {output_count} Strong-format set rows"
+        f"Converted {unique_count - skipped} SugarWod workouts -> {output_count} Strong-format set rows"
     )
     print(f"Wrote {output_path}")
     return 0

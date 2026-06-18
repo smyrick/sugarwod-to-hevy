@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Architecture: sugarwod-to-hevy</title>
+  <style>
+    :root {
+      --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2563eb;
+      --border: #e5e7eb; --code: #f5f5f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --fg: #e6edf3; --muted: #9aa4b2; --accent: #58a6ff;
+        --border: #30363d; --code: #161b22;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.6 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    .layout { display: grid; grid-template-columns: 230px 1fr; gap: 2rem; max-width: 1080px; margin: 0 auto; padding: 2rem; }
+    nav { position: sticky; top: 1rem; align-self: start; font-size: 0.9rem; }
+    nav a { color: var(--accent); text-decoration: none; display: block; padding: 0.2rem 0; }
+    nav a:hover { text-decoration: underline; }
+    h1 { margin-top: 0; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+    .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.93rem; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+    th { background: var(--code); }
+    code, pre { background: var(--code); border-radius: 4px; font-size: 0.9em; }
+    code { padding: 0.05rem 0.3rem; }
+    pre { padding: 1rem; overflow-x: auto; }
+    svg { max-width: 100%; height: auto; display: block; margin: 1rem 0; }
+    .diagram-block { margin: 1.5rem 0; }
+    .pill { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } nav { position: static; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav id="toc" aria-label="Table of contents"></nav>
+    <main>
+      <h1>Architecture: sugarwod-to-hevy</h1>
+      <p class="meta">Last updated: 2026-06-18 — Structural overview for developers and AI agents. <span class="pill">detail: small</span> <span class="pill">theme: neutral light/dark</span></p>
+
+      <section id="overview">
+        <h2>Overview</h2>
+        <p>A single-file Python 3 CLI that converts a <strong>SugarWOD</strong> workout export
+        (<code>workouts.csv</code>, one row per workout) into the <strong>Strong app CSV format</strong>
+        (one row per set) that <strong>Hevy</strong> accepts via <em>Import Strong CSV</em>. No third-party
+        dependencies — standard library only.</p>
+        <p>The hard part is not parsing; it is <strong>weight-unit correctness</strong>. Hevy's Strong
+        importer assumes the <code>Weight</code> column is kilograms, while SugarWOD logs barbell loads in
+        pounds. The converter writes adaptive-precision kg strings that round-trip back to the original
+        whole-pound display in Hevy (see <code>lbs_to_strong_kg()</code>).</p>
+      </section>
+
+      <section id="project-type">
+        <h2>Project Type</h2>
+        <table>
+          <tr><th>Type</th><td>CLI data-conversion script (ETL: extract → transform → load-to-file)</td></tr>
+          <tr><th>Primary language</th><td>Python 3 (uses <code>from __future__ import annotations</code>; 3.9+ syntax in type hints)</td></tr>
+          <tr><th>Dependencies</th><td>None — stdlib only (<code>argparse</code>, <code>csv</code>, <code>json</code>, <code>re</code>, <code>datetime</code>, <code>pathlib</code>)</td></tr>
+          <tr><th>Build system</th><td>None. Run directly with <code>python3</code>.</td></tr>
+          <tr><th>Tests</th><td><code>pytest</code> suite in <code>tests/</code> (dev-only dependency). See Testing.</td></tr>
+        </table>
+      </section>
+
+      <section id="entry-points">
+        <h2>Entry Point</h2>
+        <p>Single entry point: <code>convert_sugarwod_to_hevy.py</code> → <code>main()</code> (guarded by
+        <code>if __name__ == "__main__"</code>, exits via <code>SystemExit(main())</code>).</p>
+        <h3>How to run</h3>
+        <pre>python3 convert_sugarwod_to_hevy.py                       # input/workouts.csv -> output/workouts_hevy.csv
+python3 convert_sugarwod_to_hevy.py ~/Downloads/workouts.csv
+python3 convert_sugarwod_to_hevy.py -o out.csv --strong-weight-unit lbs</pre>
+        <h3>CLI arguments</h3>
+        <table>
+          <tr><th>Arg</th><th>Default</th><th>Purpose</th></tr>
+          <tr><td><code>input</code></td><td><code>input/workouts.csv</code></td><td>Path to SugarWOD export</td></tr>
+          <tr><td><code>-o/--output</code></td><td><code>output/workouts_hevy.csv</code></td><td>Strong CSV destination (parent dir auto-created)</td></tr>
+          <tr><td><code>--input-weight-unit</code></td><td><code>lbs</code></td><td>Unit of source load values (<code>lbs</code>|<code>kg</code>)</td></tr>
+          <tr><td><code>--strong-weight-unit</code></td><td><code>kg</code></td><td>Unit written to Strong <code>Weight</code> column (<code>kg</code> for Hevy)</td></tr>
+        </table>
+      </section>
+
+      <section id="pipeline">
+        <h2>Conversion Pipeline</h2>
+        <p>Flow inside <code>convert_file()</code>: read all rows → dedupe → route each row by
+        <code>score_type</code> → flatten to set-rows → write CSV.</p>
+        <div class="diagram-block">
+        <svg viewBox="0 0 940 150" width="100%" role="img" aria-labelledby="pipe-title">
+          <title id="pipe-title">SugarWOD to Strong CSV pipeline</title>
+          <desc>CSV is read, deduplicated, routed by score_type, expanded into per-set rows, and written out.</desc>
+          <defs>
+            <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/>
+            </marker>
+            <style>
+              .box { fill: var(--code); stroke: var(--border); stroke-width: 1.5; }
+              .lbl { fill: var(--fg); font: 13px system-ui,sans-serif; text-anchor: middle; }
+              .sub { fill: var(--muted); font: 11px system-ui,sans-serif; text-anchor: middle; }
+            </style>
+          </defs>
+          <rect class="box" x="10"  y="40" width="120" height="56" rx="6"/>
+          <text class="lbl" x="70"  y="64">input CSV</text>
+          <text class="sub" x="70"  y="82">DictReader</text>
+          <rect class="box" x="170" y="40" width="120" height="56" rx="6"/>
+          <text class="lbl" x="230" y="64">dedupe_rows</text>
+          <text class="sub" x="230" y="82">(date,title)</text>
+          <rect class="box" x="330" y="40" width="130" height="56" rx="6"/>
+          <text class="lbl" x="395" y="64">convert_row</text>
+          <text class="sub" x="395" y="82">route score_type</text>
+          <rect class="box" x="500" y="40" width="150" height="56" rx="6"/>
+          <text class="lbl" x="575" y="62">convert_load_row /</text>
+          <text class="lbl" x="575" y="80">convert_wod_row</text>
+          <rect class="box" x="690" y="40" width="120" height="56" rx="6"/>
+          <text class="lbl" x="750" y="64">make_row</text>
+          <text class="sub" x="750" y="82">12 columns</text>
+          <rect class="box" x="850" y="40" width="80" height="56" rx="6"/>
+          <text class="lbl" x="890" y="64">output</text>
+          <text class="sub" x="890" y="82">CSV</text>
+          <line x1="130" y1="68" x2="170" y2="68" stroke="currentColor" marker-end="url(#arrow)"/>
+          <line x1="290" y1="68" x2="330" y2="68" stroke="currentColor" marker-end="url(#arrow)"/>
+          <line x1="460" y1="68" x2="500" y2="68" stroke="currentColor" marker-end="url(#arrow)"/>
+          <line x1="650" y1="68" x2="690" y2="68" stroke="currentColor" marker-end="url(#arrow)"/>
+          <line x1="810" y1="68" x2="850" y2="68" stroke="currentColor" marker-end="url(#arrow)"/>
+        </svg>
+        </div>
+
+        <h3>score_type routing</h3>
+        <div class="diagram-block">
+        <svg viewBox="0 0 720 230" width="100%" role="img" aria-labelledby="route-title">
+          <title id="route-title">Routing by score_type</title>
+          <desc>Load goes to convert_load_row; empty score_type to timed WOD; Reps to rep rows; everything else to a generic WOD row.</desc>
+          <defs>
+            <style>
+              .b { fill: var(--code); stroke: var(--border); stroke-width: 1.5; }
+              .t { fill: var(--fg); font: 12.5px system-ui,sans-serif; text-anchor: middle; }
+              .s { fill: var(--muted); font: 11px system-ui,sans-serif; text-anchor: middle; }
+            </style>
+          </defs>
+          <rect class="b" x="280" y="10" width="160" height="44" rx="6"/>
+          <text class="t" x="360" y="37">convert_row(row)</text>
+          <rect class="b" x="20"  y="120" width="150" height="64" rx="6"/>
+          <text class="t" x="95"  y="146">Load</text>
+          <text class="s" x="95"  y="164">weight + reps</text>
+          <text class="s" x="95"  y="178">per set</text>
+          <rect class="b" x="200" y="120" width="150" height="64" rx="6"/>
+          <text class="t" x="275" y="146">"" (empty)</text>
+          <text class="s" x="275" y="164">timed WOD</text>
+          <text class="s" x="275" y="178">Seconds</text>
+          <rect class="b" x="380" y="120" width="150" height="64" rx="6"/>
+          <text class="t" x="455" y="146">Reps</text>
+          <text class="s" x="455" y="164">rep rows</text>
+          <text class="s" x="455" y="178">from set_details</text>
+          <rect class="b" x="560" y="120" width="150" height="64" rx="6"/>
+          <text class="t" x="635" y="146">Rounds+Reps /</text>
+          <text class="t" x="635" y="162">other</text>
+          <text class="s" x="635" y="178">generic, Notes only</text>
+          <line x1="330" y1="54" x2="95"  y2="120" stroke="currentColor"/>
+          <line x1="345" y1="54" x2="275" y2="120" stroke="currentColor"/>
+          <line x1="375" y1="54" x2="455" y2="120" stroke="currentColor"/>
+          <line x1="390" y1="54" x2="635" y2="120" stroke="currentColor"/>
+          <text class="s" x="360" y="100">map_exercise_name() applied to Load lifts</text>
+        </svg>
+        </div>
+      </section>
+
+      <section id="modules">
+        <h2>Core Functions</h2>
+        <p>Everything lives in one module. Grouped by responsibility:</p>
+        <table>
+          <tr><th>Function</th><th>Responsibility</th></tr>
+          <tr><td><code>main</code> / <code>convert_file</code></td><td>CLI parsing, read input, orchestrate, write 12-column Strong CSV, print summary counts</td></tr>
+          <tr><td><code>convert_row</code></td><td>Top-level router: <code>score_type == "Load"</code> → load path, else WOD path</td></tr>
+          <tr><td><code>convert_load_row</code></td><td>Barbell lifts → one row per set with weight + reps</td></tr>
+          <tr><td><code>convert_wod_row</code></td><td>Timed / rep / generic WODs → custom-exercise rows (Seconds or Reps)</td></tr>
+          <tr><td><code>build_load_sets</code></td><td>Pair loads (from <code>set_details</code>) with reps (parsed from description); replicate/carry-forward on count mismatch</td></tr>
+          <tr><td><code>lbs_to_strong_kg</code></td><td><strong>Critical:</strong> adaptive-precision lbs→kg so Hevy's kg→lbs display matches the original whole-pound load</td></tr>
+          <tr><td><code>format_strong_weight</code></td><td>Dispatch on input/output unit combo (lbs↔kg)</td></tr>
+          <tr><td><code>dedupe_rows</code></td><td>Collapse duplicate <code>(date,title)</code> rows, keeping the richest <code>set_details</code></td></tr>
+          <tr><td><code>parse_set_details</code> / <code>parse_reps_from_description</code> / <code>extract_loads</code> / <code>time_seconds_from_details</code></td><td>Field extractors from SugarWOD CSV cells</td></tr>
+          <tr><td><code>build_workout_notes</code> / <code>build_wod_notes</code></td><td>Compose pipe-separated note strings (notes, RX/SCALED, PR, result)</td></tr>
+          <tr><td><code>EXERCISE_NAME_MAP</code></td><td>Static dict mapping SugarWOD lift names → Hevy canonical names (e.g. <code>Back Squat → Squat (Barbell)</code>)</td></tr>
+        </table>
+      </section>
+
+      <section id="data-layer">
+        <h2>Data Formats</h2>
+        <p>No database. Two flat CSV contracts, each documented for humans and agents:</p>
+        <table>
+          <tr><th>Format</th><th>Shape</th><th>Spec</th></tr>
+          <tr><td>SugarWOD export (input)</td><td>11 lowercase columns, one row per workout; <code>set_details</code> is JSON-in-a-cell</td><td><code>docs/SUGARWOD_FORMAT.md</code></td></tr>
+          <tr><td>Strong CSV (output)</td><td>12 fixed columns, one row per set; comma-delimited, RFC-4180 minimal quoting</td><td><code>docs/STRONG_FORMAT.md</code></td></tr>
+        </table>
+        <p>Migration pitfalls (weight units, Hevy quirks, rounding) are captured in <code>docs/LEARNINGS.md</code>.
+        Personal workout CSVs are gitignored (<code>input/</code>, <code>output/</code>, and <code>*.csv</code>).</p>
+      </section>
+
+      <section id="weight">
+        <h2>Weight Conversion (why it exists)</h2>
+        <p>The Strong schema has a single <code>Weight</code> column and no unit field. Hevy reads it as
+        kilograms. Writing raw pounds makes loads appear ~2.2× too heavy. <code>lbs_to_strong_kg()</code>
+        rounds to the nearest whole pound, then picks the <em>shortest</em> kg string (2–3 decimals in
+        practice; algorithm tries up to 5) whose round-trip <code>kg → lbs</code> redisplays the original
+        pound value in Hevy.</p>
+        <table>
+          <tr><th>SugarWOD lbs</th><th>CSV kg</th><th>Hevy display</th></tr>
+          <tr><td>320</td><td>145.15</td><td>320</td></tr>
+          <tr><td>190</td><td>86.183</td><td>190</td></tr>
+          <tr><td>335</td><td>151.953</td><td>335</td></tr>
+        </table>
+        <p class="meta">Verified: every whole pound 1–1000 round-trips exactly, needing at most 3 decimals.</p>
+      </section>
+
+      <section id="testing">
+        <h2>Testing</h2>
+        <p><code>tests/test_convert.py</code> (run with <code>python3 -m pytest</code>) covers the
+        correctness-critical paths: the <code>lbs_to_strong_kg</code> round-trip for every whole pound
+        1–1000, <code>format_strong_weight</code> unit dispatch, <code>build_load_sets</code> pairing
+        branches, <code>score_type</code> routing, dedupe, and the end-to-end "bad rows skip, not crash"
+        behavior. <code>pytest</code> is a dev-only dependency; the converter itself stays stdlib-only.
+        Hevy-verified session spot-checks remain documented in <code>docs/LEARNINGS.md</code>.</p>
+      </section>
+
+      <section id="resources">
+        <h2>Additional Resources</h2>
+        <ul>
+          <li><code>README.md</code> — export → convert → import walkthrough</li>
+          <li><code>docs/SUGARWOD_FORMAT.md</code>, <code>docs/STRONG_FORMAT.md</code>, <code>docs/LEARNINGS.md</code></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+  <script>
+    (function () {
+      const main = document.querySelector('main');
+      const toc = document.getElementById('toc');
+      const headings = main.querySelectorAll('h2');
+      const frag = document.createDocumentFragment();
+      headings.forEach((h) => {
+        if (!h.id) h.id = h.textContent.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+        const a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        a.addEventListener('click', (e) => { e.preventDefault(); h.scrollIntoView({ behavior: 'smooth' }); history.pushState(null, '', '#' + h.id); });
+        frag.appendChild(a);
+      });
+      toc.appendChild(frag);
+    })();
+  </script>
+</body>
+</html>

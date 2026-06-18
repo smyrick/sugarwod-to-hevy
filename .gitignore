@@ -1,3 +1,8 @@
+input/
 output/
 .cursor/
 *.csv
+.DS_Store
+__pycache__/
+.pytest_cache/
+.venv/
